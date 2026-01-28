@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { randomInt } from 'crypto';
 
 interface BotInfo {
   username: string;
@@ -21,6 +22,7 @@ class BotManager {
     
     if (tokens.length === 0) {
       console.warn('⚠️ Nenhum token encontrado nas variáveis de ambiente');
+      console.warn('⚠️ Configure BOT_TOKENS no Vercel: Settings → Environment Variables');
       return;
     }
 
@@ -70,9 +72,11 @@ class BotManager {
         const username = botInfo.username;
 
         if (!username) {
+          console.warn(`⚠️ Bot sem username encontrado para token ${token.substring(0, 10)}...`);
           return null;
         }
 
+        console.log(`✅ Bot válido encontrado: @${username}`);
         return {
           username,
           url: `https://t.me/${username}`,
@@ -83,8 +87,13 @@ class BotManager {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: any) {
       // Token inválido, bot não existe, ou erro de conexão
+      if (error.response?.status === 401) {
+        console.warn(`❌ Token inválido: ${token.substring(0, 10)}...`);
+      } else {
+        console.warn(`⚠️ Erro ao verificar token ${token.substring(0, 10)}...:`, error.message);
+      }
       return null;
     }
   }
@@ -112,6 +121,9 @@ class BotManager {
     });
 
     console.log(`✅ ${validBots.length} bots válidos encontrados de ${tokens.length} tokens`);
+    if (validBots.length > 0) {
+      console.log(`📋 Bots disponíveis: ${validBots.map(b => `@${b.username}`).join(', ')}`);
+    }
   }
 
   /**
@@ -139,11 +151,18 @@ class BotManager {
     const validBots = Array.from(this.bots.values()).filter(bot => bot.isValid);
     
     if (validBots.length === 0) {
+      console.warn('⚠️ Nenhum bot válido disponível para redirecionamento');
       return null;
     }
 
-    const randomIndex = Math.floor(Math.random() * validBots.length);
-    return validBots[randomIndex];
+    // Usar crypto do Node.js para gerar número verdadeiramente aleatório
+    const randomIndex = randomInt(0, validBots.length);
+    const selectedBot = validBots[randomIndex];
+    
+    console.log(`🎲 Bot selecionado aleatoriamente: @${selectedBot.username} (índice ${randomIndex + 1} de ${validBots.length} bots disponíveis)`);
+    console.log(`📋 Todos os bots disponíveis: ${validBots.map(b => `@${b.username}`).join(', ')}`);
+    
+    return selectedBot;
   }
 
   /**
@@ -178,12 +197,13 @@ class BotManager {
   }
 }
 
-// Singleton instance
+// Singleton instance (compartilhado entre requisições no mesmo processo)
 let botManagerInstance: BotManager | null = null;
 
 export function getBotManager(): BotManager {
   if (!botManagerInstance) {
     botManagerInstance = new BotManager();
+    console.log('🆕 Nova instância do BotManager criada');
   }
   return botManagerInstance;
 }
